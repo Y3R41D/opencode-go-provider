@@ -57,6 +57,7 @@ Test files live in `tests/` and mirror the `src/` structure:
 - `tests/usage-bar.test.ts` — Status bar usage display
 - `tests/docs-inventories.test.ts` — Holds the hand-written file lists in this doc and `architecture.md` to what is on disk
 - `tests/effort-decisions.test.ts` — Researched effort ladders: decisions file, resolution order, unverified reporting
+- `tests/pi-ai-source.test.ts` — Where the Pi catalog gate reads pi-ai from: latest on npm, newest local copy offline
 
 ### Linting & Formatting
 

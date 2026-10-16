@@ -5,9 +5,8 @@
  *   with FALLBACK_MODELS in src/types.ts and docs/models.md tables.
  * - Default: --check (report diff). With --write, updates src/types.ts and docs/models.md.
  *
- * Pi source resolution:
- *  1) Local pi-ai install (global bun, deepseek-harness pnpm, cache)
- *  2) Fallback fetch from unpkg/jsdelivr
+ * Pi source: the latest published pi-ai from npm/CDN, falling back to the newest local
+ * copy when offline (see scripts/pi-ai-source.ts).
  *
  * Usage:
  *   bun scripts/sync-from-pi.ts            # check
@@ -17,16 +16,15 @@
  */
 import fs from "fs";
 import path from "path";
-import os from "os";
 import {
   loadDecisions,
   resolveEfforts,
   unverifiedEfforts,
   type EffortDecisionSet,
 } from "./effort-decisions";
+import { loadPiAiData } from "./pi-ai-source";
 
 const WRITE = process.argv.includes("--write");
-const VERBOSE = process.argv.includes("--verbose");
 
 type PiModel = {
   id: string;
@@ -46,116 +44,6 @@ type PiData = Record<string, Record<string, PiModel>>;
 
 function log(...args: unknown[]) {
   console.log(...args);
-}
-function vlog(...args: unknown[]) {
-  if (VERBOSE) console.log(...args);
-}
-
-function findPiJsonLocal(): string | null {
-  const homedir = os.homedir();
-  const candidates = [
-    path.join(
-      homedir,
-      ".bun/install/global/node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json",
-    ),
-    path.join(homedir, ".bun/install/cache"),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
-    if (fs.existsSync(c) && fs.statSync(c).isDirectory()) {
-      // search inside cache for pi-ai
-      try {
-        const entries = fs.readdirSync(c);
-        for (const e of entries) {
-          if (e.includes("pi-ai")) {
-            const p = path.join(c, e, "dist/providers/data/opencode-go.json");
-            if (fs.existsSync(p)) return p;
-            // also try nested
-            const nested = findFileRecursive(path.join(c, e), "opencode-go.json");
-            if (nested) return nested;
-          }
-        }
-      } catch {}
-    }
-  }
-  // search in deepseek-harness pnpm store
-  const harnessPaths = [
-    path.join(homedir, "Projects/deepseek-harness/node_modules"),
-    path.join(homedir, "Projects/opencode-go-provider/node_modules"),
-  ];
-  for (const base of harnessPaths) {
-    if (!fs.existsSync(base)) continue;
-    const found = findFileRecursive(base, "opencode-go.json");
-    if (found && found.includes("pi-ai")) return found;
-  }
-  // also try via bun pm view? fallback to find command
-  try {
-    const proc = Bun.spawnSync(
-      ["find", homedir + "/.bun", "-name", "opencode-go.json", "-path", "*pi-ai*"],
-      {
-        stdout: "pipe",
-      },
-    );
-    const out = proc.stdout.toString().trim().split("\n").filter(Boolean);
-    if (out.length > 0) {
-      // prefer global
-      const sorted = out.sort((a, b) => a.length - b.length);
-      return sorted[0];
-    }
-  } catch {}
-  return null;
-}
-
-function findFileRecursive(dir: string, filename: string): string | null {
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const ent of entries) {
-      const full = path.join(dir, ent.name);
-      if (ent.isFile() && ent.name === filename) return full;
-      if (ent.isDirectory() && !ent.name.startsWith(".") && ent.name !== "node_modules") {
-        // shallow one level for pi-ai
-        if (full.includes("pi-ai") && ent.name === "opencode-go.json") return full;
-      }
-    }
-    // deeper search for pi-ai folder
-    for (const ent of entries) {
-      if (ent.isDirectory()) {
-        const sub = path.join(dir, ent.name);
-        if (sub.includes("pi-ai") || ent.name === "@earendil-works" || ent.name === ".pnpm") {
-          const res = findFileRecursive(sub, filename);
-          if (res) return res;
-        }
-      }
-    }
-  } catch {}
-  return null;
-}
-
-async function loadPiData(): Promise<{ data: PiData; source: string }> {
-  const local = findPiJsonLocal();
-  if (local && fs.existsSync(local)) {
-    vlog(`Found Pi JSON locally: ${local}`);
-    const data = JSON.parse(fs.readFileSync(local, "utf8")) as PiData;
-    return { data, source: local };
-  }
-  // fallback fetch from CDN
-  const urls = [
-    "https://cdn.jsdelivr.net/npm/@earendil-works/pi-ai/dist/providers/data/opencode-go.json",
-    "https://unpkg.com/@earendil-works/pi-ai/dist/providers/data/opencode-go.json",
-  ];
-  for (const url of urls) {
-    try {
-      vlog(`Fetching Pi JSON from ${url}`);
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = (await res.json()) as PiData;
-        return { data, source: url };
-      }
-    } catch (e) {
-      vlog(`Fetch failed ${url}: ${e}`);
-    }
-  }
-  throw new Error("Could not locate Pi opencode-go.json locally or via CDN");
 }
 
 function flattenPi(data: PiData): Map<string, PiModel> {
@@ -552,7 +440,7 @@ async function main() {
   const docsPath = path.resolve(import.meta.dir, "../docs/models.md");
 
   log(`🔍 Sync from Pi — ${WRITE ? "WRITE" : "CHECK"} mode`);
-  const { data, source } = await loadPiData();
+  const { data, source } = await loadPiAiData<PiData>("opencode-go.json");
   log(`Source: ${source}`);
   const piMap = flattenPi(data);
   log(`Pi models: ${piMap.size}`);
