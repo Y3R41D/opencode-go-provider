@@ -21,17 +21,6 @@ export function activate(context: vscode.ExtensionContext) {
   const provider = new OcGoChatModelProvider(context.secrets, ua);
   _provider = provider;
 
-  // Show startup notification about model updates
-  void provider.refreshModels().then(async () => {
-    const modelCount = provider.getModelCount();
-    const apiKey = await context.secrets.get("opencode-go.apiKey");
-    if (apiKey && modelCount > 0) {
-      void vscode.window.showInformationMessage(
-        `$(sync) OpenCode Go: ${modelCount} models loaded from API`,
-      );
-    }
-  });
-
   const usageBar = new OcGoUsageStatusBar(context.secrets, ua);
   context.subscriptions.push(usageBar);
 

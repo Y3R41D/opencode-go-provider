@@ -49,7 +49,6 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
   private readonly _modelMap = new Map<string, OcGoModelInfo>();
   private _models: OcGoModelInfo[] = FALLBACK_MODELS;
   private _modelsFetched = false;
-  private readonly _modelListHashKey = "opencode-go.modelListHash";
   private _modelsDevCatalog: ModelsDevCatalog | undefined;
 
   constructor(
@@ -67,19 +66,6 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     void this.fetchModels().then(() => {
       this._onDidChangeLanguageModelChatInformation.fire();
     });
-  }
-
-  /** Get current model count */
-  getModelCount(): number {
-    return this._models.length;
-  }
-
-  /** Refresh models from API. Pass force=true to also refresh the models.dev catalog. */
-  async refreshModels(force = false): Promise<void> {
-    if (force) {
-      this._modelsDevCatalog = undefined;
-    }
-    await this.fetchModels();
   }
 
   /** Fetch (and memoize) the models.dev catalog for the OpenCode providers. */
@@ -122,16 +108,6 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       }
 
       const modelIds = body.data.map((item) => item.id).sort();
-      const newHash = this.computeHash(modelIds.join(","));
-      const oldHash = await this.secrets.get(this._modelListHashKey);
-
-      // Check for model list changes
-      if (oldHash && oldHash !== newHash) {
-        await this.notifyModelChanges(oldHash, newHash, modelIds);
-      }
-
-      // Store new hash
-      await this.secrets.store(this._modelListHashKey, newHash);
 
       // Merge authoritative metadata from models.dev (same catalog the CLI uses).
       const catalog = await this.getModelsDevCatalog();
@@ -153,76 +129,6 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     } catch (error) {
       debugLog("fetchModelsError", `Failed to fetch dynamic models: ${error}. Using fallbacks.`);
     }
-  }
-
-  /** Simple hash function for model list comparison */
-  private computeHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  /** Detect and notify about model changes */
-  private async notifyModelChanges(
-    _oldHash: string,
-    _newHash: string,
-    currentModelIds: string[],
-  ): Promise<void> {
-    try {
-      // Get previous model list from storage (if we stored it)
-      const previousModelIdsJson = await this.secrets.get("opencode-go.previousModelIds");
-      let previousModelIds: string[] = [];
-      if (previousModelIdsJson) {
-        try {
-          previousModelIds = JSON.parse(previousModelIdsJson);
-        } catch {
-          previousModelIds = [];
-        }
-      }
-
-      const previousSet = new Set(previousModelIds);
-      const currentSet = new Set(currentModelIds);
-
-      const added = currentModelIds.filter((id) => !previousSet.has(id));
-      const removed = previousModelIds.filter((id) => !currentSet.has(id));
-
-      if (added.length > 0 || removed.length > 0) {
-        const changes: string[] = [];
-        if (added.length > 0) {
-          changes.push(`➕ ${added.join(", ")}`);
-        }
-        if (removed.length > 0) {
-          changes.push(`➖ ${removed.join(", ")}`);
-        }
-        const message = `Models updated: ${changes.join(" · ")}`;
-        debugLog("fetchModels", message);
-        // Fire model info changed event so VS Code refreshes the model picker
-        this._onDidChangeLanguageModelChatInformation.fire();
-        // Show notification in status bar area
-        void this.showModelChangeNotification(message);
-      }
-
-      // Store current model IDs for next comparison
-      await this.secrets.store("opencode-go.previousModelIds", JSON.stringify(currentModelIds));
-    } catch (error) {
-      debugLog("modelChangeDetectionError", `Failed to detect model changes: ${error}`);
-    }
-  }
-
-  /** Show model change notification near status bar */
-  private showModelChangeNotification(message: string): void {
-    const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-    item.text = `$(warning) ${message}`;
-    item.tooltip = "OpenCode Go model list changed";
-    item.command = "opencode-go.showUsage";
-    item.show();
-
-    // Auto-hide after 10 seconds
-    setTimeout(() => item.dispose(), 10000);
   }
 
   private getConfiguredApiKeyState(configuration: unknown): {

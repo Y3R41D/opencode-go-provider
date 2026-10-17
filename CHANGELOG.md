@@ -4,11 +4,10 @@
 
 ### Added
 
-- **Dynamic model catalog from the API.** `fetchModels()` now lists the models the API reports as enabled (`GET /zen/go/v1/models`) instead of only the bundled fallback list, and detects additions/removals with a stored hash plus a status-bar notification.
+- **Dynamic model catalog from the API.** `fetchModels()` now lists the models the API reports as enabled (`GET /zen/go/v1/models`) instead of only the bundled fallback list.
 - **models.dev metadata merge.** New `src/models-dev.ts` fetches the community catalog (`https://models.dev/api.json`, buckets `opencode` and `opencode-go`) — the same source the OpenCode CLI uses — to supply accurate context window, max output, vision, tool calling, reasoning efforts, and pricing. The OpenCode Go bucket takes precedence so diverging prices (e.g. `deepseek-v4.1-flash` $0.15 vs $0.30) resolve correctly. Falls back to ID inference when the catalog is unavailable.
 - **Free tier by real price.** Models are marked free from `cost.input === 0 && cost.output === 0`, with the `-free` name suffix as fallback. The picker shows `[free]`, `[go]`, and `[opencode]` badges plus cost/source in the tooltip.
 - **Picker ordering.** Free models first, then OpenCode Go models, then general OpenCode models, ties broken alphabetically.
-- **Startup notification** reporting how many models were loaded from the API.
 
 ### Changed
 
