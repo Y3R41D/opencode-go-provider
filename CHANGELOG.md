@@ -14,6 +14,10 @@
 
 - **Usage labels in English.** The status bar / usage line now shows `W` (weekly) and `M` (monthly) instead of the Chinese `週`/`月`, and small percentages render with more decimals (e.g. `0.01%`).
 
+### Fixed
+
+- **Context-window usage now updates.** The provider reports prompt/completion token counts via a `usage` data part, so the chat view's context-window widget shows real numbers instead of always `0` / `0%`. The `Reserved for response` figure is still hard-coded to 8192 by Copilot Chat itself (a VS Code issue, not this extension).
+
 ## [0.1.78] - 2026-10-09
 
 ### Changed

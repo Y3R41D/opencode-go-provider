@@ -36,6 +36,49 @@ import {
 } from "./types";
 import { fetchModelsDevCatalog, type ModelsDevCatalog } from "./models-dev";
 
+/**
+ * VS Code (Copilot Chat) reads token usage from a `LanguageModelDataPart` that
+ * carries the "usage" MIME type (CustomDataPartMimeTypes.Usage) and a
+ * `{ prompt_tokens, completion_tokens, total_tokens }` JSON body. Without it the
+ * chat view's context-window widget always shows 0 tokens. `LanguageModelDataPart`
+ * is not part of the `@types/vscode` version this extension compiles against, so
+ * resolve the constructor lazily and stay silent on hosts that lack it.
+ */
+const USAGE_MIME_TYPE = "usage";
+
+interface LanguageModelDataPartCtor {
+  new (data: Uint8Array, mimeType: string): LanguageModelResponsePart;
+}
+
+function getLanguageModelDataPartCtor(): LanguageModelDataPartCtor | undefined {
+  const ctor = (vscode as unknown as { LanguageModelDataPart?: unknown }).LanguageModelDataPart;
+  return typeof ctor === "function" ? (ctor as LanguageModelDataPartCtor) : undefined;
+}
+
+/** Report prompt/completion token counts for the current response. */
+function reportTokenUsage(
+  progress: Progress<LanguageModelResponsePart>,
+  promptTokens: number,
+  completionTokens: number,
+): void {
+  const DataPart = getLanguageModelDataPartCtor();
+  if (!DataPart || promptTokens <= 0) return;
+  const prompt = Math.max(0, Math.round(promptTokens));
+  const completion = Math.max(0, Math.round(completionTokens));
+  const payload = {
+    prompt_tokens: prompt,
+    completion_tokens: completion,
+    total_tokens: prompt + completion,
+  };
+  try {
+    progress.report(
+      new DataPart(new TextEncoder().encode(JSON.stringify(payload)), USAGE_MIME_TYPE),
+    );
+  } catch (error) {
+    debugLog("reportTokenUsage", `Failed to report token usage: ${error}`);
+  }
+}
+
 export class OcGoChatModelProvider implements LanguageModelChatProvider {
   private readonly _onDidChangeLanguageModelChatInformation = new EventEmitter<void>();
   readonly onDidChangeLanguageModelChatInformation: Event<void> =
@@ -458,13 +501,29 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     const abortController = new AbortController();
     const cancellationSubscription = token.onCancellationRequested(() => abortController.abort());
 
+    // Count streamed output so the context-window widget reflects real usage,
+    // forwarding every part unchanged to the caller's progress callback.
+    let outputTokenCount = 0;
+    let promptTokenCount = 0;
+    const countedProgress: Progress<LanguageModelResponsePart> = {
+      report: (part) => {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          outputTokenCount += estimateTokens(part.value);
+        } else if (part instanceof vscode.LanguageModelToolCallPart) {
+          outputTokenCount += estimateTokens(`${part.name}${JSON.stringify(part.input ?? {})}`);
+        }
+        progress.report(part);
+      },
+    };
+
     try {
       const [apiKey, inputTokenCount] = await Promise.all([
         this.ensureApiKey(options, false),
         Promise.resolve(estimateMessagesTokens(messages as never)),
       ]);
+      promptTokenCount = inputTokenCount;
       if (!apiKey) {
-        progress.report(
+        countedProgress.report(
           new vscode.LanguageModelTextPart(
             'OpenCode Go API key is not configured. Add or configure OpenCode Go from the chat model picker, run "OpenCode Go: Manage OpenCode Go API Key" from the Command Palette, or retry this request and enter the key when prompted.',
           ),
@@ -531,7 +590,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
               throw err;
             }
             const message = err instanceof Error ? err.message : String(err);
-            progress.report(
+            countedProgress.report(
               new vscode.LanguageModelTextPart(
                 `Image analysis failed: ${message}. The selected model (${effectiveModelInfo?.displayName ?? model.id}) does not support vision and no vision fallback model is available. Please switch to a vision-capable model and try again.`,
               ),
@@ -593,7 +652,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
           topPVal,
           userAgent: this.userAgent,
           fallbackModels: FALLBACK_MODELS,
-          progress,
+          progress: countedProgress,
           token,
           abortController,
         });
@@ -610,7 +669,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
           temperatureVal,
           userAgent: this.userAgent,
           fallbackModels: FALLBACK_MODELS,
-          progress,
+          progress: countedProgress,
           token,
           abortController,
           reasoningEffort,
@@ -634,7 +693,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
         topPVal,
         FALLBACK_MODELS,
         this.userAgent,
-        progress,
+        countedProgress,
         token,
         abortController,
         reasoningEffort,
@@ -651,6 +710,7 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       }
       throw err;
     } finally {
+      reportTokenUsage(progress, promptTokenCount, outputTokenCount);
       cancellationSubscription.dispose();
       this._onDidCompleteResponse.fire();
     }

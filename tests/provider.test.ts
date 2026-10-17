@@ -17,6 +17,12 @@ jest.mock("vscode", () => ({
   LanguageModelTextPart: class {
     constructor(public value: string) {}
   },
+  LanguageModelDataPart: class {
+    constructor(
+      public data: Uint8Array,
+      public mimeType: string,
+    ) {}
+  },
   LanguageModelToolCallPart: class {
     constructor(
       public callId: string,
@@ -57,6 +63,16 @@ jest.mock("vscode", () => ({
 describe("OcGoChatModelProvider", () => {
   let secrets: vscode.SecretStorage;
   let provider: OcGoChatModelProvider;
+
+  /**
+   * Response parts excluding the trailing token-usage data part the provider
+   * emits after every response (mimeType "usage").
+   */
+  function responseParts(progress: { report: jest.Mock }): any[] {
+    return progress.report.mock.calls
+      .map((call: unknown[]) => call[0])
+      .filter((part: any) => part?.mimeType !== "usage");
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -291,7 +307,7 @@ describe("OcGoChatModelProvider", () => {
       expect.any(AbortSignal),
       "test-ua",
     );
-    expect(progress.report).toHaveBeenCalledTimes(1);
+    expect(responseParts(progress)).toHaveLength(1);
     expect(progress.report).toHaveBeenCalledWith(expect.objectContaining({ value: "Hello world" }));
   });
 
@@ -618,6 +634,44 @@ describe("OcGoChatModelProvider", () => {
     expect(toolCallReports[0][0].input).toEqual({ skill: "using-superpowers" });
   });
 
+  it("reports prompt and completion token usage to the chat context widget", async () => {
+    (secrets.get as jest.Mock).mockResolvedValue("test-key");
+
+    const mockStream = async function* () {
+      yield { choices: [{ delta: { content: "hello world" } }] };
+    };
+    (streamChatCompletion as jest.Mock).mockReturnValue(mockStream());
+
+    const progress = { report: jest.fn() };
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })),
+    };
+
+    await provider.provideLanguageModelChatResponse(
+      { id: "deepseek-v4-flash", maxInputTokens: 100000, maxOutputTokens: 65536 } as any,
+      [
+        {
+          role: vscode.LanguageModelChatMessageRole.User,
+          content: [new vscode.LanguageModelTextPart("hi there")],
+        },
+      ] as any,
+      { modelOptions: {} } as any,
+      progress,
+      token as any,
+    );
+
+    const usagePart = progress.report.mock.calls
+      .map((call: any[]) => call[0])
+      .find((part: any) => part?.mimeType === "usage");
+    expect(usagePart).toBeDefined();
+
+    const usage = JSON.parse(new TextDecoder().decode(usagePart.data));
+    expect(usage.prompt_tokens).toBeGreaterThan(0);
+    expect(usage.completion_tokens).toBeGreaterThan(0);
+    expect(usage.total_tokens).toBe(usage.prompt_tokens + usage.completion_tokens);
+  });
+
   it("anchors DeepSeek OpenAI system prompts with provider identity guidance", async () => {
     (secrets.get as jest.Mock).mockResolvedValue("test-key");
 
@@ -900,7 +954,7 @@ describe("OcGoChatModelProvider", () => {
       token as any,
     );
 
-    expect(progress.report.mock.calls).toHaveLength(2);
+    expect(responseParts(progress)).toHaveLength(2);
     expect(progress.report.mock.calls[0][0]).toEqual(
       expect.objectContaining({ value: "Let me check " }),
     );
@@ -950,7 +1004,7 @@ describe("OcGoChatModelProvider", () => {
       token as any,
     );
 
-    expect(progress.report.mock.calls).toHaveLength(2);
+    expect(responseParts(progress)).toHaveLength(2);
     expect(progress.report.mock.calls[0][0]).toEqual(
       expect.objectContaining({ callId: "call_1", name: "get_weather" }),
     );
@@ -2504,7 +2558,7 @@ describe("OcGoChatModelProvider", () => {
       token as any,
     );
 
-    expect(progress.report.mock.calls).toHaveLength(3);
+    expect(responseParts(progress)).toHaveLength(3);
     expect(progress.report.mock.calls[0][0]).toEqual(expect.objectContaining({ value: "Before " }));
     expect(progress.report.mock.calls[1][0]).toEqual(
       expect.objectContaining({ name: "read_file" }),
