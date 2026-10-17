@@ -99,6 +99,20 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-go.refreshModels", async () => {
+      const apiKey = await context.secrets.get("opencode-go.apiKey");
+      if (!apiKey) {
+        vscode.window.showWarningMessage(
+          "OpenCode Go: set an API key first with 'OpenCode Go: Manage OpenCode Go API Key'.",
+        );
+        return;
+      }
+      const count = await provider.refreshModels(true);
+      vscode.window.showInformationMessage(`OpenCode Go: model list refreshed (${count} models).`);
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("opencode-go.toggleDebugLogging", async () => {
       const current = context.globalState.get<boolean>("opencode-go.debug", false);
       const next = !current;

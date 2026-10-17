@@ -88,6 +88,11 @@
         "category": "OpenCode Go"
       },
       {
+        "command": "opencode-go.refreshModels",
+        "title": "Refresh Models",
+        "category": "OpenCode Go"
+      },
+      {
         "command": "opencode-go.toggleDebugLogging",
         "title": "Toggle Debug Logging",
         "category": "OpenCode Go"

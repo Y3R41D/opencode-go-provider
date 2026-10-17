@@ -68,6 +68,21 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     });
   }
 
+  /**
+   * Re-fetch the enabled model catalog from the API and the models.dev metadata,
+   * then refresh the VS Code model picker. Pass `force = true` to also discard the
+   * memoized models.dev catalog so its metadata is fetched again. Returns the
+   * number of models now available.
+   */
+  async refreshModels(force = true): Promise<number> {
+    if (force) {
+      this._modelsDevCatalog = undefined;
+    }
+    await this.fetchModels();
+    this._onDidChangeLanguageModelChatInformation.fire();
+    return this._models.length;
+  }
+
   /** Fetch (and memoize) the models.dev catalog for the OpenCode providers. */
   private async getModelsDevCatalog(): Promise<ModelsDevCatalog> {
     if (this._modelsDevCatalog && this._modelsDevCatalog.size > 0) {

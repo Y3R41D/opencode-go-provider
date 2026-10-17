@@ -30,6 +30,7 @@ const mockCreateStatusBarItem = jest.fn(() => ({
 jest.mock("../src/provider", () => ({
   OcGoChatModelProvider: jest.fn().mockImplementation(() => ({
     fireModelInfoChanged: jest.fn(),
+    refreshModels: jest.fn(async () => 0),
     onDidCompleteResponse: jest.fn(() => ({ dispose: jest.fn() })),
   })),
 }));
@@ -97,7 +98,7 @@ describe("activate", () => {
     expect(registeredCommands.has("opencode-go.toggleDebugLogging")).toBe(true);
     expect(registeredCommands.has("opencode-go.openDebugLog")).toBe(true);
     expect(registeredCommands.has("opencode-go.showUsage")).toBe(true);
-    expect(registeredCommands.has("opencode-go.refreshModels")).toBe(false);
+    expect(registeredCommands.has("opencode-go.refreshModels")).toBe(true);
     expect(mockCreateStatusBarItem).toHaveBeenCalled();
     expect(mockShowErrorMessage).not.toHaveBeenCalled();
   });

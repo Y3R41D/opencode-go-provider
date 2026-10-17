@@ -8,6 +8,7 @@
 - **models.dev metadata merge.** New `src/models-dev.ts` fetches the community catalog (`https://models.dev/api.json`, buckets `opencode` and `opencode-go`) — the same source the OpenCode CLI uses — to supply accurate context window, max output, vision, tool calling, reasoning efforts, and pricing. The OpenCode Go bucket takes precedence so diverging prices (e.g. `deepseek-v4.1-flash` $0.15 vs $0.30) resolve correctly. Falls back to ID inference when the catalog is unavailable.
 - **Free tier by real price.** Models are marked free from `cost.input === 0 && cost.output === 0`, with the `-free` name suffix as fallback. The picker shows `[free]`, `[go]`, and `[opencode]` badges plus cost/source in the tooltip.
 - **Picker ordering.** Free models first, then OpenCode Go models, then general OpenCode models, ties broken alphabetically.
+- **Refresh Models command.** `OpenCode Go: Refresh Models` re-fetches the enabled model list from the API and the models.dev metadata, then refreshes the picker.
 
 ### Changed
 
