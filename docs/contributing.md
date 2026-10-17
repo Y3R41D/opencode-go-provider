@@ -62,6 +62,14 @@ Test files live in `tests/` and mirror the `src/` structure:
 - `tests/docs-inventories.test.ts` — Holds the hand-written file lists in this doc and `architecture.md` to what is on disk
 - `tests/effort-decisions.test.ts` — Researched effort ladders: decisions file, resolution order, unverified reporting
 - `tests/pi-ai-source.test.ts` — Where the Pi catalog gate reads pi-ai from: latest on npm, newest local copy offline
+- `tests/api-integration.test.ts` — Opt-in live checks against the real OpenCode endpoints (skipped unless `OPENCODE_INTEGRATION=1`)
+
+The last suite touches the network and is therefore excluded from `bun run test`/CI. Run it manually
+against a real key:
+
+```bash
+OPENCODE_INTEGRATION=1 OPENCODE_API_KEY=sk-... bun run test:integration
+```
 
 ### Linting & Formatting
 

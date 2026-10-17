@@ -21,6 +21,7 @@
 ### Docs
 
 - **Zen vs Go documented.** `docs/models.md` now spells out the two OpenCode products and their endpoints (`/zen/v1` for pay-as-you-go Zen vs `/zen/go/v1` for the Go subscription), the shared Console API key, and why Zen-only free models such as `deepseek-v4.1-flash-free` never appear in this extension's picker.
+- **Live endpoint checks.** New opt-in `tests/api-integration.test.ts` (`bun run test:integration`) verifies against the real API that the Go endpoint serves `deepseek-v4.1-flash` with the `x-opencode-session` header, that the header is mandatory (`400 MissingSessionID`), and that Zen refuses its free tier outside OpenCode (`403 FreeTierError`) — confirming the free models cannot be exposed by an extension.
 
 ## [0.1.78] - 2026-10-09
 

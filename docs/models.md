@@ -30,6 +30,24 @@ from the picker. The `[go]` badge on a model means its *metadata* came from the 
 bucket — not that the model is served only by Go (shared IDs such as `deepseek-v4.1-flash` appear in
 both buckets, and the Go one wins for pricing).
 
+### Verified behaviour (2026-10-17)
+
+Checked live against both endpoints with a Console token:
+
+- **Go serves third-party clients, but only with a session header.** `POST /zen/go/v1/chat/completions`
+  with `deepseek-v4.1-flash` returns `200` when the request carries `x-opencode-session`, and
+  `400 MissingSessionID` without it. The extension already sends the header on every request.
+- **Zen needs credits for paid models.** `deepseek-v4.1-flash` on `/zen/v1` returns
+  `402 Insufficient account funds` until the Console balance is topped up.
+- **Zen's free tier is client-locked.** `deepseek-v4.1-flash-free` on `/zen/v1` returns
+  `403 FreeTierError` — *"OpenCode's free tier can only be used from within OpenCode."* So the free
+  models are **not reachable from a VS Code extension**, and a second `opencode` provider here could
+  not offer them. The free models *inside* Go (`longcat-2.5-preview-free`, `beam-free`) are the only
+  free entries this extension can use.
+
+The opt-in suite [`tests/api-integration.test.ts`](contributing.md) pins these three checks down;
+run it with `OPENCODE_INTEGRATION=1 OPENCODE_API_KEY=… bun run test:integration`.
+
 ## Model List
 
 ### GLM Series (Zhipu AI)
