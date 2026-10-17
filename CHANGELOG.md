@@ -18,6 +18,10 @@
 
 - **Context-window usage now updates.** The provider reports prompt/completion token counts via a `usage` data part, so the chat view's context-window widget shows real numbers instead of always `0` / `0%`. The `Reserved for response` figure is still hard-coded to 8192 by Copilot Chat itself (a VS Code issue, not this extension).
 
+### Docs
+
+- **Zen vs Go documented.** `docs/models.md` now spells out the two OpenCode products and their endpoints (`/zen/v1` for pay-as-you-go Zen vs `/zen/go/v1` for the Go subscription), the shared Console API key, and why Zen-only free models such as `deepseek-v4.1-flash-free` never appear in this extension's picker.
+
 ## [0.1.78] - 2026-10-09
 
 ### Changed

@@ -77,6 +77,12 @@ Kimi K2.5/K2.6/K2.7 Code/K3 · MiMo-V2-Pro/Omni, V2.5-Pro/V2.5 · MiniMax M2.5/M
 Qwen3.5–3.8 Plus/Max · Grok 4.5 · GPT 5.6 Luna · Muse Spark 1.2 · Hy3. Full table with context
 windows and API formats: [docs/models.md](docs/models.md).
 
+> **Zen vs Go.** This extension targets the **OpenCode Go** endpoint (`/zen/go/v1`). The
+> pay-as-you-go **Zen** endpoint (`/zen/v1`) hosts a different catalog — including many free models
+> such as `deepseek-v4.1-flash-free` — that the Go API does not list, so they never appear in the
+> picker. Both products share the same Console API key. Details:
+> [docs/models.md](docs/models.md#zen-vs-go-two-endpoints-one-key).
+
 ## Privacy
 
 - Your API key is stored in VS Code `SecretStorage` (`opencode-go.apiKey`).

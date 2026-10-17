@@ -2,6 +2,34 @@
 
 At runtime the extension fetches the available models from the OpenCode Go API (`GET /models`) and infers capabilities for each model ID (`inferModelInfo` in `src/types.ts`). When the fetch fails or no API key is configured yet, the bundled `FALLBACK_MODELS` array in `src/types.ts` is used instead. Each model has an `OcGoModelInfo` entry specifying capabilities, context window, and API format.
 
+## Zen vs Go: two endpoints, one key
+
+OpenCode ships **two separate products** behind two base paths. They are easy to swap, so it is worth
+being precise:
+
+| | **OpenCode Zen** (Console) | **OpenCode Go** (this extension) |
+|---|---|---|
+| Billing | pay-as-you-go (credits) | $10/month (Go) · $40/month (Go Plus) |
+| Classic base path | `https://opencode.ai/zen/v1` | `https://opencode.ai/zen/go/v1` |
+| Current base path | `https://opencode.ai/inference/openai/v1`, `…/anthropic/v1`, `…/google/v1beta` | `https://opencode.ai/inference/go/openai/v1`, `…/go/anthropic/v1`, `…/go/google/v1beta` |
+| Config prefix | `opencode/<model-id>` | `opencode-go/<model-id>` |
+| models.dev bucket | `opencode` | `opencode-go` |
+| Free models | many — `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `kimi-k2.5-free`… (200 requests/day) | a few — `longcat-2.5-preview-free`, `beam-free`, `step-5-preview-free`, `cat-jam-free` (limited time) |
+
+**One API key, different entitlement.** Both products authenticate with the key you create in the
+[OpenCode Console](https://opencode.ai/console) (`OPENCODE_API_KEY` in models.dev for both buckets);
+Zen and Go are separate *products*, not separate *keys*. The official FAQ puts it plainly: *"Is Go
+the same as Zen? No. Zen is pay-as-you-go, while Go costs $10/month."* If your Go allowance runs
+out and you hold Zen credits, Go can fall back to that balance via the **Use balance** option in the
+console.
+
+**Why `deepseek-v4.1-flash-free` never shows up here.** This extension talks to the **Go** endpoint
+(`/zen/go/v1`) and lists only the model IDs *that endpoint* reports as enabled. The Zen-only free
+models live on `/zen/v1` (the `opencode` bucket), so they are simply absent from the Go catalog and
+from the picker. The `[go]` badge on a model means its *metadata* came from the `opencode-go`
+bucket — not that the model is served only by Go (shared IDs such as `deepseek-v4.1-flash` appear in
+both buckets, and the Go one wins for pricing).
+
 ## Model List
 
 ### GLM Series (Zhipu AI)
