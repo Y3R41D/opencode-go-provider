@@ -25,6 +25,7 @@ Copilot Chat
 | `extension.ts` | Entry point. Registers the provider, MCP client, tools, and debug commands. |
 | `provider.ts` | `OcGoChatModelProvider` implements `LanguageModelChatProvider`. Orchestrates model listing, API key management, message conversion, and streaming. |
 | `types.ts` | Shared types (`OcGoModelInfo`, `OcGoChatMessage`, `OcGoToolCall`) and the `FALLBACK_MODELS` list. |
+| `models-dev.ts` | Fetches the community catalog (`https://models.dev/api.json`, buckets `opencode` and `opencode-go`) to enrich models with accurate context window, max output, vision, tool calling, reasoning efforts, and pricing. OpenCode Go entries take precedence; falls back to ID inference. |
 | `api.ts` | HTTP client with retry logic. Handles `fetch`, status codes, rate limiting (`Retry-After`), and SSE streaming via `ReadableStream`. |
 | `openai-conversion.ts` | Converts Copilot Chat `LanguageModelChatMessage[]` → OpenAI `/chat/completions` request format. |
 | `streaming/sse.ts` | Shared SSE response body reader (`readSseLines`): per-read timeout, 1 MB buffer cap, final-buffer flush. Used by both streaming paths and `api.ts`. |

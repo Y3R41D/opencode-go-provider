@@ -21,8 +21,8 @@ describe("buildUsageLine", () => {
     const line = buildUsageLine(SAMPLE);
     expect(line).toMatch(/^Go usage — /);
     expect(line).toContain("5h 1% (in ");
-    expect(line).toContain("週 16% (in ");
-    expect(line).toContain("月 76% (in ");
+    expect(line).toContain("W 16% (in ");
+    expect(line).toContain("M 76% (in ");
     expect(line).toContain(" · ");
   });
 
@@ -33,13 +33,13 @@ describe("buildUsageLine", () => {
 
   it("handles missing fields with ?", () => {
     const line = buildUsageLine({ usage: { monthly: { percent: 42 } } });
-    expect(line).toBe("Go usage — 月 42% (in -)");
+    expect(line).toBe("Go usage — M 42% (in -)");
   });
 });
 
 describe("buildStatusBarText", () => {
   it("produces a compact line without reset times", () => {
-    expect(buildStatusBarText(SAMPLE)).toBe("Go 5h 1% · 週 16% · 月 76%");
+    expect(buildStatusBarText(SAMPLE)).toBe("Go 5h 1% · W 16% · M 76%");
   });
 
   it("returns null with no windows", () => {

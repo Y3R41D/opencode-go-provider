@@ -114,6 +114,13 @@ export interface OcGoModelInfo {
   supportsThinking?: boolean;
   /** Per-model allowed reasoning efforts (excluding "default"). If undefined and supportsThinking, generic fallback is used. */
   supportedReasoningEfforts?: ReasoningEffort[];
+  /** True if model is free tier */
+  isFree?: boolean;
+  /** models.dev bucket the metadata came from ("opencode" | "opencode-go") */
+  metadataSource?: string;
+  /** Real cost per 1M tokens from models.dev, when known */
+  costInput?: number;
+  costOutput?: number;
 }
 
 export const FALLBACK_MODELS: OcGoModelInfo[] = [
@@ -504,10 +511,23 @@ export function inferModelInfo(id: string): OcGoModelInfo {
   const isMimo = id.startsWith("mimo-");
   const isHy3 = id === "hy3" || id.startsWith("hy3-");
   const isGrok = id.startsWith("grok-");
-  const isGpt = id.startsWith("gpt-5.6");
+  const isGpt = id.startsWith("gpt-5.6") || id.startsWith("gpt-5.") || id.startsWith("gpt-6");
   const isMuse = id.startsWith("muse-");
   const isLongcat = id.startsWith("longcat-");
   const isOx = id.startsWith("ox-");
+  const isNemotron = id.startsWith("nemotron-");
+  const isGptNew = id.startsWith("gpt-") && !id.startsWith("gpt-5.6");
+  const isClaude = id.startsWith("claude-");
+  const isGemini = id.startsWith("gemini-");
+  const isGrokBuild = id.startsWith("grok-build-");
+  const isJev = id.startsWith("jev-");
+  const isOmen = id.startsWith("omen-");
+  const isSpaceBunny = id.startsWith("space-bunny");
+  const isStep = id.startsWith("step-");
+  const isCatJam = id.startsWith("cat-jam");
+  const isBigPickle = id.startsWith("big-pickle");
+  const isBeam = id.startsWith("beam-");
+  const isMistral = id.startsWith("mistral-");
 
   let contextWindow = 262144;
   let maxOutput = 65536;
@@ -572,7 +592,13 @@ export function inferModelInfo(id: string): OcGoModelInfo {
     contextWindow = id.includes("5.3") ? 1000000 : id.includes("5.2") ? 1000000 : 202752;
     maxOutput = id.includes("5.1") ? 32768 : 131072;
     if (id.includes("5.3")) {
-      supportedReasoningEfforts = ["low", "high", "max"];
+      if (id.includes("flash")) {
+        contextWindow = 1000000;
+        maxOutput = 65536;
+        supportedReasoningEfforts = ["low", "high", "max"];
+      } else {
+        supportedReasoningEfforts = ["low", "high", "max"];
+      }
     } else if (id.includes("5.2") || id === "glm-5" || id.includes("5.1")) {
       supportedReasoningEfforts = ["high", "max"];
     }
@@ -591,20 +617,50 @@ export function inferModelInfo(id: string): OcGoModelInfo {
     fixedTopP = 1;
     supportsVision = true;
     supportsThinking = true;
-    supportedReasoningEfforts = ["low", "medium", "high"];
+    if (id.includes("3.8")) {
+      if (id.includes("flash")) {
+        // Qwen 3.8 Flash
+        maxOutput = 65536;
+        supportedReasoningEfforts = ["low", "medium", "high"];
+      } else if (id.includes("max")) {
+        // Qwen 3.8 Max
+        maxOutput = 131072;
+        supportedReasoningEfforts = ["low", "medium", "xhigh"];
+      } else {
+        maxOutput = 131072;
+        supportedReasoningEfforts = ["low", "medium", "high"];
+      }
+    } else {
+      maxOutput = 65536;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    }
     contextWindow = 1000000;
-    maxOutput = id.includes("3.8") ? 131072 : 65536;
   } else if (isMimo) {
     supportsThinking = true;
     supportsVision = !id.includes("v2-pro");
-    contextWindow = id.includes("pro") ? 1048576 : 1000000;
-    maxOutput = id.includes("pro") ? 128000 : 128000;
+    if (id.includes("v2.6")) {
+      // Mimo v2.6 models (flash and pro)
+      contextWindow = id.includes("pro") ? 1048576 : 1000000;
+      maxOutput = id.includes("pro") ? 128000 : 65536;
+      if (id.includes("flash")) {
+        // Flash variant is free
+        supportsVision = true;
+      }
+    } else {
+      contextWindow = id.includes("pro") ? 1048576 : 1000000;
+      maxOutput = id.includes("pro") ? 128000 : 128000;
+    }
     supportedReasoningEfforts = ["low", "medium", "high"];
   } else if (isHy3) {
     supportsThinking = true;
     supportedReasoningEfforts = ["low", "high"];
     contextWindow = 256000;
     maxOutput = 128000;
+    if (id === "hy4-preview") {
+      contextWindow = 1000000;
+      maxOutput = 131072;
+      supportedReasoningEfforts = ["low", "high", "max"];
+    }
   } else if (isGrok) {
     // grok-4.5 uses Responses API in Pi (openai-responses)
     apiFormat = "responses";
@@ -624,20 +680,177 @@ export function inferModelInfo(id: string): OcGoModelInfo {
     apiFormat = "responses";
     supportsVision = true;
     supportsThinking = true;
-    supportedReasoningEfforts = ["minimal", "low", "medium", "high", "xhigh"];
-    contextWindow = 1048576;
-    maxOutput = 131072;
+    if (id.includes("1.3")) {
+      // Muse Spark 1.3 - contributor model
+      contextWindow = 1048576;
+      maxOutput = 131072;
+      supportedReasoningEfforts = ["minimal", "low", "medium", "high", "xhigh", "max"];
+    } else {
+      // Muse Spark 1.2
+      contextWindow = 1048576;
+      maxOutput = 131072;
+      supportedReasoningEfforts = ["minimal", "low", "medium", "high", "xhigh"];
+    }
   } else if (isLongcat) {
     supportsThinking = true;
     supportedReasoningEfforts = ["low", "medium", "high"];
     contextWindow = 1000000;
     maxOutput = 131072;
+    if (id.includes("2.5-preview-free")) {
+      // LongCat 2.5 preview free - free tier
+      contextWindow = 1000000;
+      maxOutput = 131072;
+    }
   } else if (isOx) {
     supportsVision = true;
     supportsThinking = true;
     supportedReasoningEfforts = ["low", "high", "max"];
     contextWindow = 1000000;
     maxOutput = 131072;
+  } else if (isNemotron) {
+    // NVIDIA Nemotron models - free tier
+    apiFormat = "openai";
+    supportsVision = id.includes("vl") || id.includes("super");
+    supportsThinking = false;
+    contextWindow = 128000;
+    maxOutput = 8192;
+  } else if (isClaude) {
+    // Anthropic Claude models
+    apiFormat = "anthropic";
+    supportsVision = true;
+    supportsThinking = true;
+    if (id.includes("opus")) {
+      contextWindow = 200000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("sonnet")) {
+      contextWindow = 200000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("haiku")) {
+      contextWindow = 200000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("fable")) {
+      contextWindow = 200000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else {
+      contextWindow = 200000;
+      maxOutput = 8192;
+    }
+  } else if (isGemini) {
+    // Google Gemini models
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = true;
+    if (id.includes("4-argon")) {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("3.8")) {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("3.7")) {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("3.6")) {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("3.5")) {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else if (id.includes("3.1")) {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    } else {
+      contextWindow = 1000000;
+      maxOutput = 8192;
+      supportedReasoningEfforts = ["low", "medium", "high"];
+    }
+  } else if (isGrok || isGrokBuild) {
+    // Grok models (including grok-build)
+    apiFormat = "responses";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 500000;
+    maxOutput = 500000;
+  } else if (isJev) {
+    // JEV models - free
+    apiFormat = "openai";
+    supportsThinking = false;
+    supportsVision = false;
+    contextWindow = 8192;
+    maxOutput = 4096;
+  } else if (isOmen) {
+    // Omen models
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 1000000;
+    maxOutput = 131072;
+  } else if (isSpaceBunny) {
+    // Space Bunny - free
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 1000000;
+    maxOutput = 131072;
+  } else if (isStep) {
+    // Step models
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 1000000;
+    maxOutput = 131072;
+  } else if (isCatJam) {
+    // Cat Jam models - free
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 262144;
+    maxOutput = 65536;
+  } else if (isBigPickle) {
+    // Big Pickle - free
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 262144;
+    maxOutput = 65536;
+  } else if (isBeam) {
+    // Beam - free tier
+    apiFormat = "openai";
+    supportsVision = false;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high"];
+    contextWindow = 262144;
+    maxOutput = 65536;
+  } else if (isMistral) {
+    // Mistral Large
+    apiFormat = "openai";
+    supportsVision = true;
+    supportsThinking = false;
+    contextWindow = 262144;
+    maxOutput = 65536;
+  } else if (isGptNew) {
+    // GPT-5.x and GPT-6.x models (non-Luna/Sol/Terra)
+    apiFormat = "responses";
+    supportsVision = true;
+    supportsThinking = true;
+    supportedReasoningEfforts = ["low", "medium", "high", "xhigh", "max"];
+    contextWindow = 1050000;
+    maxOutput = 128000;
   }
 
   const displayName = id
@@ -645,7 +858,11 @@ export function inferModelInfo(id: string): OcGoModelInfo {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-  return {
+  // Free tier is decided by models.dev pricing (cost 0). As a fallback for
+  // models missing from the catalog, honor the API's "-free" name suffix.
+  const isFree = id.endsWith("-free");
+
+  return applyFreeLabel({
     id,
     name: displayName,
     displayName,
@@ -657,8 +874,146 @@ export function inferModelInfo(id: string): OcGoModelInfo {
     fixedTemperature,
     fixedTopP,
     supportsThinking,
+    isFree,
     ...(supportedReasoningEfforts ? { supportedReasoningEfforts } : {}),
-  };
+  });
+}
+
+/** Strip any existing badge suffix (e.g. " [free · go]") from a display name. */
+function stripBadges(name: string): string {
+  return name
+    .replace(/\s*\[[^\]]*\]\s*$/g, "")
+    .replace(/\s*\(xfree\)$/i, "")
+    .trim();
+}
+
+/**
+ * Build the human-readable display name with capability badges:
+ *   "Beam Free [free · go]"
+ * Badges:  "free" when cost is zero, "go"/"opencode" for the metadata source.
+ */
+export function applyFreeLabel(info: OcGoModelInfo): OcGoModelInfo {
+  const baseName = stripBadges(info.displayName || info.name);
+  const badges: string[] = [];
+  if (info.isFree) {
+    badges.push("free");
+  }
+  if (info.metadataSource === "opencode-go") {
+    badges.push("go");
+  } else if (info.metadataSource === "opencode") {
+    badges.push("opencode");
+  }
+  const labeled = badges.length > 0 ? `${baseName} [${badges.join(" · ")}]` : baseName;
+  info.displayName = labeled;
+  info.name = labeled;
+  return info;
+}
+
+/** Valid reasoning efforts we can present in the VS Code dropdown. */
+const VALID_REASONING_EFFORTS: readonly ReasoningEffort[] = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
+/**
+ * Metadata shape coming from the models.dev catalog (the same source the
+ * OpenCode CLI uses). Only the fields we consume are typed here.
+ */
+export interface ModelsDevMetadata {
+  name?: string;
+  attachment?: boolean;
+  reasoning?: boolean;
+  reasoning_options?: Array<{ type: string; values?: string[] }>;
+  tool_call?: boolean;
+  temperature?: boolean;
+  modalities?: { input?: string[]; output?: string[] };
+  limit?: { context?: number; input?: number; output?: number };
+  cost?: { input?: number; output?: number; cache_read?: number; cache_write?: number };
+  /** models.dev bucket this metadata came from. */
+  source?: string;
+}
+
+/**
+ * Merge authoritative models.dev metadata over the ID-inferred model info.
+ * Fields absent from the catalog keep the inferred value (graceful fallback).
+ * Free tier is decided by zero pricing, not by the "-free" name suffix.
+ */
+export function applyModelsDevMetadata(base: OcGoModelInfo, md?: ModelsDevMetadata): OcGoModelInfo {
+  if (!md) {
+    return base;
+  }
+
+  const merged: OcGoModelInfo = { ...base };
+
+  // Prefer the catalog's human-readable name when available.
+  if (md.name && md.name.trim()) {
+    merged.displayName = md.name.trim();
+  }
+
+  // Context window / output limits
+  if (md.limit?.context && md.limit.context > 0) {
+    merged.contextWindow = md.limit.context;
+  }
+  if (md.limit?.output && md.limit.output > 0) {
+    merged.maxOutput = md.limit.output;
+  }
+
+  // Vision support: attachment OR image modality
+  if (typeof md.attachment === "boolean") {
+    merged.supportsVision = md.attachment;
+  }
+  if (md.modalities?.input?.includes("image")) {
+    merged.supportsVision = true;
+  }
+
+  // Tool calling
+  if (typeof md.tool_call === "boolean") {
+    merged.supportsTools = md.tool_call;
+  }
+
+  // Thinking / reasoning efforts (keep Anthropic adaptive-thinking models clean)
+  if (base.apiFormat !== "anthropic") {
+    if (typeof md.reasoning === "boolean") {
+      merged.supportsThinking = md.reasoning;
+    }
+    const effortOption = md.reasoning_options?.find(
+      (o) => o.type === "effort" && Array.isArray(o.values) && o.values.length > 0,
+    );
+    if (effortOption?.values) {
+      const filtered = effortOption.values.filter((v): v is ReasoningEffort =>
+        (VALID_REASONING_EFFORTS as readonly string[]).includes(v),
+      );
+      if (filtered.length > 0) {
+        merged.supportedReasoningEfforts = filtered;
+      }
+    } else if (md.reasoning === false) {
+      // Model does not reason at all: hide the dropdown explicitly.
+      merged.supportsThinking = false;
+      merged.supportedReasoningEfforts = undefined;
+    }
+  }
+
+  // Models that don't accept a temperature param must not receive one.
+  if (md.temperature === false) {
+    merged.fixedTemperature = undefined;
+  }
+
+  // Free tier: pricing of zero on both input and output.
+  const cost = md.cost;
+  if (cost && typeof cost.input === "number" && typeof cost.output === "number") {
+    merged.isFree = cost.input === 0 && cost.output === 0;
+    merged.costInput = cost.input;
+    merged.costOutput = cost.output;
+  }
+  if (md.source) {
+    merged.metadataSource = md.source;
+  }
+
+  return applyFreeLabel(merged);
 }
 
 // ============================================================================

@@ -1,13 +1,17 @@
 {
   "name": "opencode-go-provider",
-  "publisher": "HidenobuNagai",
+  "publisher": "Y3R41D",
   "displayName": "OpenCode Go Provider",
   "description": "OpenCode Go Chat Provider for VS Code Copilot Chat",
-  "version": "0.1.78",
+  "version": "2.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hidenobunagai/opencode-go-provider"
+    "url": "https://github.com/Y3R41D/opencode-go-provider"
+  },
+  "homepage": "https://github.com/Y3R41D/opencode-go-provider#readme",
+  "bugs": {
+    "url": "https://github.com/Y3R41D/opencode-go-provider/issues"
   },
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -96,7 +100,7 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "bun run compile",
+    "vscode:prepublish": "npx tsc -p ./",
     "compile": "rm -rf out && tsc -p ./",
     "watch": "tsc -w -p ./",
     "test": "jest",
@@ -108,7 +112,7 @@
     "check-changelog": "bun scripts/check-changelog.ts",
     "sync:pi": "bun scripts/sync-from-pi.ts",
     "sync:pi:write": "bun scripts/sync-from-pi.ts --write",
-    "package:vsix": "bun run check-changelog && bun run compile && vsce package --allow-missing-repository"
+    "package:vsix": "bun run check-changelog && npx tsc -p ./ && vsce package --allow-missing-repository"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^2.23.0",

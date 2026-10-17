@@ -79,7 +79,7 @@ describe("OcGoUsageStatusBar", () => {
   it("shows the compact quota and returns the full line", async () => {
     secrets.get.mockResolvedValue("test-key");
     (fetchOpenCodeGoUsage as jest.Mock).mockResolvedValue({
-      line: "Go usage — 5h 1% (in 4h55m) · 週 16% (in 5d0h) · 月 76% (in 2d2h)",
+      line: "Go usage — 5h 1% (in 4h55m) · W 16% (in 5d0h) · M 76% (in 2d2h)",
       usage: SAMPLE_USAGE,
       error: undefined,
     });
@@ -87,7 +87,7 @@ describe("OcGoUsageStatusBar", () => {
     const line = await bar.refresh();
     expect(line).toContain("Go usage —");
     const item = mockItem();
-    expect(item.text).toBe("$(gauge) Go 5h 1% · 週 16% · 月 76%");
+    expect(item.text).toBe("$(gauge) Go 5h 1% · W 16% · M 76%");
     expect(item.tooltip).toContain("Go usage — 5h 1%");
     expect(item.show).toHaveBeenCalled();
     expect(vscodeMock.window.showWarningMessage).not.toHaveBeenCalled();
@@ -110,7 +110,7 @@ describe("OcGoUsageStatusBar", () => {
   it("warns once when monthly usage crosses the 80% threshold", async () => {
     secrets.get.mockResolvedValue("test-key");
     (fetchOpenCodeGoUsage as jest.Mock).mockResolvedValue({
-      line: "Go usage — 月 85%",
+      line: "Go usage — M 85%",
       usage: { usage: { monthly: { percent: 85 } } },
       error: undefined,
     });
@@ -121,13 +121,13 @@ describe("OcGoUsageStatusBar", () => {
 
     // drops below threshold, then climbs again — warns again
     (fetchOpenCodeGoUsage as jest.Mock).mockResolvedValue({
-      line: "Go usage — 月 50%",
+      line: "Go usage — M 50%",
       usage: { usage: { monthly: { percent: 50 } } },
       error: undefined,
     });
     await bar.refresh();
     (fetchOpenCodeGoUsage as jest.Mock).mockResolvedValue({
-      line: "Go usage — 月 90%",
+      line: "Go usage — M 90%",
       usage: { usage: { monthly: { percent: 90 } } },
       error: undefined,
     });
@@ -138,7 +138,7 @@ describe("OcGoUsageStatusBar", () => {
   it("showUsage shows an info message with the full line", async () => {
     secrets.get.mockResolvedValue("test-key");
     (fetchOpenCodeGoUsage as jest.Mock).mockResolvedValue({
-      line: "Go usage — 5h 1% · 週 16% · 月 76%",
+      line: "Go usage — 5h 1% · W 16% · M 76%",
       usage: SAMPLE_USAGE,
       error: undefined,
     });

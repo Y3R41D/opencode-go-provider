@@ -32,7 +32,9 @@ import {
   REASONING_EFFORT_ORDER,
   ReasoningEffort,
   inferModelInfo,
+  applyModelsDevMetadata,
 } from "./types";
+import { fetchModelsDevCatalog, type ModelsDevCatalog } from "./models-dev";
 
 export class OcGoChatModelProvider implements LanguageModelChatProvider {
   private readonly _onDidChangeLanguageModelChatInformation = new EventEmitter<void>();
@@ -47,6 +49,8 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
   private readonly _modelMap = new Map<string, OcGoModelInfo>();
   private _models: OcGoModelInfo[] = FALLBACK_MODELS;
   private _modelsFetched = false;
+  private readonly _modelListHashKey = "opencode-go.modelListHash";
+  private _modelsDevCatalog: ModelsDevCatalog | undefined;
 
   constructor(
     private readonly secrets: vscode.SecretStorage,
@@ -63,6 +67,32 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     void this.fetchModels().then(() => {
       this._onDidChangeLanguageModelChatInformation.fire();
     });
+  }
+
+  /** Get current model count */
+  getModelCount(): number {
+    return this._models.length;
+  }
+
+  /** Refresh models from API. Pass force=true to also refresh the models.dev catalog. */
+  async refreshModels(force = false): Promise<void> {
+    if (force) {
+      this._modelsDevCatalog = undefined;
+    }
+    await this.fetchModels();
+  }
+
+  /** Fetch (and memoize) the models.dev catalog for the OpenCode providers. */
+  private async getModelsDevCatalog(): Promise<ModelsDevCatalog> {
+    if (this._modelsDevCatalog && this._modelsDevCatalog.size > 0) {
+      return this._modelsDevCatalog;
+    }
+    const catalog = await fetchModelsDevCatalog(this.userAgent);
+    // Only cache a non-empty result so transient failures retry next refresh.
+    if (catalog.size > 0) {
+      this._modelsDevCatalog = catalog;
+    }
+    return catalog;
   }
 
   private async fetchModels(): Promise<void> {
@@ -91,7 +121,28 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
         throw new Error("Invalid response format");
       }
 
-      const fetchedModels: OcGoModelInfo[] = body.data.map((item) => inferModelInfo(item.id));
+      const modelIds = body.data.map((item) => item.id).sort();
+      const newHash = this.computeHash(modelIds.join(","));
+      const oldHash = await this.secrets.get(this._modelListHashKey);
+
+      // Check for model list changes
+      if (oldHash && oldHash !== newHash) {
+        await this.notifyModelChanges(oldHash, newHash, modelIds);
+      }
+
+      // Store new hash
+      await this.secrets.store(this._modelListHashKey, newHash);
+
+      // Merge authoritative metadata from models.dev (same catalog the CLI uses).
+      const catalog = await this.getModelsDevCatalog();
+      const fetchedModels: OcGoModelInfo[] = modelIds.map((id) =>
+        applyModelsDevMetadata(inferModelInfo(id), catalog.get(id)),
+      );
+      const freeCount = fetchedModels.filter((m) => m.isFree).length;
+      debugLog(
+        "fetchModels",
+        `Applied models.dev metadata to ${fetchedModels.length} models (${freeCount} free, catalog size ${catalog.size}).`,
+      );
       this._models = fetchedModels;
       this._modelMap.clear();
       for (const m of fetchedModels) {
@@ -102,6 +153,76 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     } catch (error) {
       debugLog("fetchModelsError", `Failed to fetch dynamic models: ${error}. Using fallbacks.`);
     }
+  }
+
+  /** Simple hash function for model list comparison */
+  private computeHash(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  /** Detect and notify about model changes */
+  private async notifyModelChanges(
+    _oldHash: string,
+    _newHash: string,
+    currentModelIds: string[],
+  ): Promise<void> {
+    try {
+      // Get previous model list from storage (if we stored it)
+      const previousModelIdsJson = await this.secrets.get("opencode-go.previousModelIds");
+      let previousModelIds: string[] = [];
+      if (previousModelIdsJson) {
+        try {
+          previousModelIds = JSON.parse(previousModelIdsJson);
+        } catch {
+          previousModelIds = [];
+        }
+      }
+
+      const previousSet = new Set(previousModelIds);
+      const currentSet = new Set(currentModelIds);
+
+      const added = currentModelIds.filter((id) => !previousSet.has(id));
+      const removed = previousModelIds.filter((id) => !currentSet.has(id));
+
+      if (added.length > 0 || removed.length > 0) {
+        const changes: string[] = [];
+        if (added.length > 0) {
+          changes.push(`➕ ${added.join(", ")}`);
+        }
+        if (removed.length > 0) {
+          changes.push(`➖ ${removed.join(", ")}`);
+        }
+        const message = `Models updated: ${changes.join(" · ")}`;
+        debugLog("fetchModels", message);
+        // Fire model info changed event so VS Code refreshes the model picker
+        this._onDidChangeLanguageModelChatInformation.fire();
+        // Show notification in status bar area
+        void this.showModelChangeNotification(message);
+      }
+
+      // Store current model IDs for next comparison
+      await this.secrets.store("opencode-go.previousModelIds", JSON.stringify(currentModelIds));
+    } catch (error) {
+      debugLog("modelChangeDetectionError", `Failed to detect model changes: ${error}`);
+    }
+  }
+
+  /** Show model change notification near status bar */
+  private showModelChangeNotification(message: string): void {
+    const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    item.text = `$(warning) ${message}`;
+    item.tooltip = "OpenCode Go model list changed";
+    item.command = "opencode-go.showUsage";
+    item.show();
+
+    // Auto-hide after 10 seconds
+    setTimeout(() => item.dispose(), 10000);
   }
 
   private getConfiguredApiKeyState(configuration: unknown): {
@@ -279,10 +400,28 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
     }
   }
 
+  /**
+   * Order models in the picker: free first, then OpenCode Go models, then
+   * metadata sourced from the general OpenCode bucket. Ties break by name.
+   */
+  private _sortModels(models: OcGoModelInfo[]): OcGoModelInfo[] {
+    const rank = (m: OcGoModelInfo): number => {
+      if (m.isFree) return 0;
+      if (m.metadataSource === "opencode-go") return 1;
+      if (m.metadataSource === "opencode") return 2;
+      return 3;
+    };
+    return [...models].sort((a, b) => {
+      const byRank = rank(a) - rank(b);
+      if (byRank !== 0) return byRank;
+      return (a.displayName || a.id).localeCompare(b.displayName || b.id);
+    });
+  }
+
   private _mapToChatInformation(
     models: Array<{ id: string; name: string }>,
   ): LanguageModelChatInformation[] {
-    return models.map((model) => {
+    return this._sortModels(models as OcGoModelInfo[]).map((model) => {
       const info = this._modelMap.get(model.id) ?? {
         id: model.id,
         name: model.name,
@@ -310,6 +449,14 @@ export class OcGoChatModelProvider implements LanguageModelChatProvider {
       }
       if (info.apiFormat === "responses") {
         tooltipParts.push("API: Responses format");
+      }
+      if (info.isFree) {
+        tooltipParts.push("Free");
+      } else if (typeof info.costInput === "number" && typeof info.costOutput === "number") {
+        tooltipParts.push(`Cost: $${info.costInput}/M in · $${info.costOutput}/M out`);
+      }
+      if (info.metadataSource) {
+        tooltipParts.push(`Metadata: models.dev/${info.metadataSource}`);
       }
 
       return {

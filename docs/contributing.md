@@ -1,13 +1,17 @@
 # Contributing
 
 > [!NOTE]
-> **Maintenance status: as-is, no support.** This is a personal project. I do not provide setup or
-> usage help, and issues and pull requests may be read, ignored, or closed without a reply —
-> sometimes for months. Silence is not a decision. Forking is the intended path (MIT).
-> Security issues: put `security` in the title.
+> **This repository is a fork.** It is a fork of
+> [hidenobunagai/opencode-go-provider](https://github.com/hidenobunagai/opencode-go-provider),
+> maintained by [@Y3R41D](https://github.com/Y3R41D). Upstream is treated as-is with no support
+> guarantee (MIT); forking remains the intended path. When you clone this fork, add upstream as a
+> second remote so you can pull model/API updates:
 >
-> Everything below is setup, testing, and release notes — mainly for my own use, and for anyone
-> who forks.
+> ```bash
+> git remote add upstream https://github.com/hidenobunagai/opencode-go-provider.git
+> ```
+>
+> Everything below is setup, testing, and release notes — mainly for maintaining this fork.
 
 ## Prerequisites
 
@@ -18,7 +22,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/hidenobunagai/opencode-go-provider.git
+git clone https://github.com/Y3R41D/opencode-go-provider.git
 cd opencode-go-provider
 bun install --ignore-scripts
 bun run compile
@@ -93,8 +97,8 @@ bun run package:vsix   # Creates opencode-go-provider-<version>.vsix
    export VSCE_PAT="your-publisher-pat"
    bunx vsce publish --packagePath opencode-go-provider-<version>.vsix
    ```
-   Alternatives: `bunx vsce publish` packages and publishes in one step; `bunx vsce login HidenobuNagai` stores the PAT in the OS credential store so `VSCE_PAT` is not needed.
-5. Verify the new version on the [Marketplace page](https://marketplace.visualstudio.com/items?itemName=HidenobuNagai.opencode-go-provider) (may take a few minutes to appear).
+   Alternatives: `bunx vsce publish` packages and publishes in one step; `bunx vsce login Y3R41D` stores the PAT in the OS credential store so `VSCE_PAT` is not needed.
+5. Verify the new version on the Marketplace page (`Y3R41D.opencode-go-provider`) if you publish under your own publisher (may take a few minutes to appear).
 
 ## Code Style
 
@@ -185,6 +189,7 @@ opencode-go-provider/
 │   ├── extension.ts          # Entry point
 │   ├── provider.ts           # LanguageModelChatProvider
 │   ├── types.ts              # Types + FALLBACK_MODELS
+│   ├── models-dev.ts         # models.dev catalog metadata merge
 │   ├── api.ts                # HTTP client + retry
 │   ├── openai-conversion.ts  # OpenAI message conversion
 │   ├── anthropic-conversion.ts # Anthropic message conversion

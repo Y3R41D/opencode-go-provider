@@ -31,6 +31,8 @@ jest.mock("../src/provider", () => ({
   OcGoChatModelProvider: jest.fn().mockImplementation(() => ({
     fireModelInfoChanged: jest.fn(),
     onDidCompleteResponse: jest.fn(() => ({ dispose: jest.fn() })),
+    refreshModels: jest.fn(async () => undefined),
+    getModelCount: jest.fn(() => 0),
   })),
 }));
 
